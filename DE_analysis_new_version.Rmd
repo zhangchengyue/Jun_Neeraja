@@ -1,0 +1,364 @@
+# Just trying out some garbage...
+
+Reference to: https://uclouvain-cbio.github.io/WSBIM2122/sec-rnaseq.html 
+
+These are the count files from STAR
+```{r}
+cg1_quants <- read.table("htseq_counts/cg1_counts.txt")
+cg2_quants <- read.table("htseq_counts/cg2_counts.txt")
+cg3_quants <- read.table("htseq_counts/cg3_counts.txt")
+cl1_quants <- read.table("htseq_counts/cl1_counts.txt")
+cl2_quants <- read.table("htseq_counts/cl1_counts.txt")
+cl3_quants <- read.table("htseq_counts/cl1_counts.txt")
+cw1_quants <- read.table("htseq_counts/cw1_counts.txt")
+cw2_quants <- read.table("htseq_counts/cw2_counts.txt")
+cw3_quants <- read.table("htseq_counts/cw3_counts.txt")
+sg1_quants <- read.table("htseq_counts/sg1_counts.txt")
+sg2_quants <- read.table("htseq_counts/sg2_counts.txt")
+sg3_quants <- read.table("htseq_counts/sg3_counts.txt")
+sl1_quants <- read.table("htseq_counts/sl1_counts.txt")
+sl2_quants <- read.table("htseq_counts/sl2_counts.txt")
+sl3_quants <- read.table("htseq_counts/sl3_counts.txt")
+sw1_quants <- read.table("htseq_counts/sw1_counts.txt")
+sw2_quants <- read.table("htseq_counts/sw2_counts.txt")
+sw3_quants <- read.table("htseq_counts/sw3_counts.txt")
+```
+
+
+
+Combine them into one data frame
+```{r}
+df_list <- list(cg1_quants, 
+               cg2_quants,
+               cg3_quants,
+               cl1_quants,
+               cl2_quants,
+               cl3_quants,
+               cw1_quants,
+               cw2_quants,
+               cw3_quants,
+               sg1_quants,
+               sg2_quants,
+               sg3_quants,
+               sl1_quants,
+               sl2_quants,
+               sl3_quants,
+               sw1_quants,
+               sw2_quants,
+               sw3_quants)
+  
+library(dplyr)
+library(purrr)
+merged_counts <- df_list %>% reduce(full_join, by='V1')
+
+colnames(merged_counts) <- c("Gene ID", 
+                             "cg1", "cg2", "cg3",
+                             "cl1", "cl2", "cl3",
+                             "cw1", "cw2", "cw3",
+                             "sg1", "sg2", "sg3",
+                             "sl1", "sl2", "sl3",
+                             "sw1", "sw2", "sw3")
+
+# View(merged_counts)
+
+# write.csv(merged_counts, "countFile.csv")
+```
+
+
+
+Conditions of samples
+```{r}
+coldata <- data.frame(samples = c("cg1", "cg2", "cg3",
+                                  "cl1", "cl2", "cl3",
+                                  "cw1", "cw2", "cw3",
+                                  "sg1", "sg2", "sg3",
+                                  "sl1", "sl2", "sl3",
+                                  "sw1", "sw2", "sw3"),
+                            conditions = as.factor(c("whole","whole", "whole",
+                                           "whole", "whole", "whole",
+                                           "whole", "whole", "whole",
+                                           "sorted","sorted", "sorted",
+                                           "sorted", "sorted", "sorted",
+                                           "sorted", "sorted", "sorted")),
+                            genotype = as.factor(c("gain",
+                                         "gain",
+                                         "gain",
+                                         "loss",
+                                         "loss",
+                                         "loss",
+                                         "wild",
+                                         "wild",
+                                         "wild",
+                                         "gain",
+                                         "gain",
+                                         "gain",
+                                         "loss",
+                                         "loss",
+                                         "loss",
+                                         "wild",
+                                         "wild",
+                                         "wild")))
+
+# write.csv(coldata, "coldata.csv")
+View(coldata)
+```
+
+
+
+Sample names
+```{r}
+samples <- c("cg1", "cg2", "cg3",
+             "cl1", "cl2", "cl3",
+             "cw1", "cw2", "cw3",
+             "sg1","sg2", "sg3",
+             "sl1", "sl2", "sl3",
+             "sw1", "sw2", "sw3")
+```
+
+
+
+
+Download DESeq2 if not done yet.
+```{r}
+if (!require("DESeq2")) {
+  BiocManager::install("DESeq2")
+  }
+library(DESeq2)
+```
+
+
+
+Process data
+```{r}
+library(tidyverse)
+counts <- merged_counts
+names <- merged_counts$`Gene ID`
+counts <- merged_counts[-1]
+rownames(counts) <- names
+# View(counts)
+# typeof(counts[[1]])
+dds <- DESeqDataSetFromMatrix(countData = counts,
+                              colData = coldata,
+                              design = ~ conditions + conditions:genotype)
+# Measure the effect of the "genotype", controlling for "conditions" differences.
+
+
+
+```
+
+
+
+# Pre-filtering
+
+by removing rows in which there are very few reads, we reduce the memory size of
+the dds data object, and we increase the speed of the transformation and testing
+functions within DESeq2. It can also improve visualizations, as features with no
+information for differential expression are not plotted.
+
+There are two popular ways for pre-filtering:
+1. Keep only rows that have at least 10 reads total
+```{r}
+keep <- rowSums(counts(dds)) >= 10
+dds1 <- dds[keep,]
+```
+
+
+
+1.1 More powerful filtering is done in Independent Filtering. Check how DESeq2
+does independent filtering herre: http://bioconductor.org/packages/devel/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#indfilt, and see if we should apply it.
+
+
+2. Ensure at least X samples with a count of 10 or more, where X can be chosen 
+as the sample size of the smallest group of samples
+```{r}
+# keep <- rowSums(counts(dds) >= 10) >= X
+
+# I picked 9 for now. Want to keep at least half of samples showing 10 reads.
+keep <- rowSums(counts(dds) >= 10) >= 9
+dds2 <- dds[keep,]
+
+# View(counts(dds))
+# View(counts(dds2))
+
+```
+
+
+We use the first minimal pre-filtering for example. 
+```{r}
+dds <- dds1
+```
+
+
+# Note on Factor Levels
+Choose which condition you would like to compare against(e.g. which level
+represent the control group).
+
+Since we have only "whole cell" and "sorted" conditions, we can choose "whole
+cell" as our reference level.
+
+```{r}
+dds$conditions <- relevel(dds$conditions, ref = "whole")
+
+```
+
+
+## Perform Differential Expression Analysis
+
+The standard differential expression analysis steps are wrapped into a single function, DESeq.
+
+Estimation steps on differential expression analysis are described here: http://bioconductor.org/packages/devel/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#theory
+```{r}
+# View(dds)
+dds <- DESeq(dds)
+```
+
+
+View size factors (normalization factors) from dds.
+
+Normalization factors are the median of the data over all genes for each sample,
+where the data is computed in following steps:
+1. Calculate pseudo-reference samples by Geometric Average (i.e. Product over
+all samples in that row, then take square root)
+
+2. Calculate ratio of each sample raw count to the pseudo-reference value in
+that row.
+
+3. Get the median over all genes for each sample. This is the normalization
+factor (also called size factor) for that gene.
+
+```{r}
+
+sizeFactors(dds)
+
+```
+
+
+
+## Plot the number of rejections over the basemean quantiles.
+
+The threshold chosen (red vertical line) is the lowest quantile for which the number of rejections is within 1 residual standard deviation to the peak of the curve.
+
+Use this line to view a list of the name or number of the coefficient
+```{r}
+resultsNames(dds)
+```
+
+
+We can specify what kind of result table we want to build. In this example, we use "conditions_sorted_vs_whole" to specify the coefficient or contrast we want to build a results table for.
+
+The __*results*__ function automatically performs __*independent*__ filtering based on the mean of normalized counts for each gene, optimizing the number of genes which will have an adjusted p value below a given FDR cutoff, alpha, with a default value of 0.1.
+```{r}
+# ?results
+res <- DESeq2::results(dds,
+               name = "conditions_sorted_vs_whole",
+               alpha = 0.05)
+# ?DESeq2::results
+```
+
+
+# Get rid of the data that has no log-fold-change.
+```{r}
+res <- results(dds, lfcThreshold = 0.01)
+head(res)
+summary(res)
+
+```
+
+## MA plot
+
+May be useful when filtering the count data.
+Blue points are significant genes, grey points are non-significant.
+Above line of 0 are genes that are up-regulated, below line of 0 are genes that are down-regulated.
+
+```{r}
+DESeq2::plotMA(res, ylim = c(-15, 15))
+```
+
+
+```{r}
+library(dplyr)
+res1 <- as.data.frame(res)
+
+# Look at differential gene expression based on adjusted p-value
+res1 <- mutate(res1, sig = ifelse(res1$padj < 0.05, "FDR < 0.05", "Not significant"))
+# View(res1)
+
+
+# Look at the fold change between two groups. If any genes labled as "FDR < 0.05" for their padj actually has LFC < 2, then it is not significant.
+res1[which(abs(res1$log2FoldChange) < 2.0), "sig"] <- "Not significant"
+
+```
+
+Volcano plot
+```{r}
+library(ggplot2)
+SIG <- "red" # Color for significant genes
+NONSIG <- "black" # Color for non-significant genes
+ggplot(res1, aes(log2FoldChange, -log10(padj))) + 
+  geom_point(aes(col = sig)) + scale_color_manual(values = c(SIG, NONSIG))
+
+```
+
+## Look at the gene with the highest fold change
+
+Rank genes based on log2FoldChange
+```{r}
+res2 <- res1[order(abs(res1$log2FoldChange), decreasing = TRUE), ]
+topgene <- rownames(res2)[1]
+topgene
+plotCounts(dds, gene = topgene, intgroup = c("conditions", "genotype"))
+
+```
+
+
+## For use of GSEA
+GSEA takes as input the complete list. None of the genes are filtered out.
+```{r}
+gsea <- as.data.frame(res2)
+nrow(gsea)
+# [1] 24617
+# write(rownames(gsea), "GSEA_input.txt")
+```
+
+
+
+
+## For use of g:Profiler
+g:Profiler takes as input the gene list filtered by threshold, in this case,
+FDR < 0.05.
+## List of significant genes
+```{r}
+gProfiler <- as.data.frame(res2[res2$sig == "FDR < 0.05", ])
+# grepl("NA.*", rownames(gProfiler))
+# rownames(gProfiler)
+
+
+library(dplyr)
+# Get rid of NA
+significant <- gProfiler %>% filter(!grepl("NA.*", rownames(gProfiler)))
+# View(significant)
+
+nrow(significant) # Genes that don't pass the threshold are filtered out.
+# [1] 177
+# write(rownames(significant), "gProfiler_input.txt")
+```
+
+
+
+## List of non-significant genes
+```{r}
+gProfiler_non <- as.data.frame(res2[res2$sig == "Not significant", ])
+# grepl("NA.*", rownames(gProfiler))
+# rownames(gProfiler)
+
+
+library(dplyr)
+# Get rid of NA
+nonsignificant <- gProfiler_non %>% filter(!grepl("NA.*", rownames(gProfiler_non)))
+# View(significant)
+
+nrow(nonsignificant) # Genes that don't pass the threshold are filtered out.
+orderedNonsig <- nonsignificant[order(abs(nonsignificant$log2FoldChange), decreasing = TRUE), ]
+# View(orderedNonsig)
+# write(rownames(orderedNonsig), "nonSig.txt")
+```

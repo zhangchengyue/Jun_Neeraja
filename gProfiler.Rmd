@@ -1,0 +1,125 @@
+
+
+```{r}
+library("gprofiler2")
+# browseVignettes("gprofiler2")
+library(dplyr)
+library(ggplot2)
+setwd("/Users/antioxidant233/Documents/Zhen_Lab/Workflow")
+```
+
+
+"Sorted wild type" vs "Sorted gain of function" Up-regulated
+```{r}
+# From sorted_wt_vs_sorted_gf up
+query <- readLines("sorted_wt_vs_sorted_gf/up.txt")
+GO <- gost(query = query, organism = "celegans", 
+           ordered_query = FALSE, significant = TRUE,
+           exclude_iea = TRUE, user_threshold = 0.01,
+           correction_method = "fdr") # Result will include FDR-corrected P-value
+# View(GO$result)
+gpSig <- GO$result
+
+gpSig %>%
+  dplyr::select(term_name, term_id, term_size, p_value) %>%
+  filter(p_value < 0.01) %>%
+  arrange(p_value) %>%
+  ggplot(aes(x= p_value, y= term_name, size = term_size, colour = p_value)) +
+  geom_point(alpha=0.5) +
+  geom_text(aes(label=ifelse(term_size>=2500,as.character(term_name),'')),
+            hjust=0.5,vjust=0.5, size = 3) +
+  scale_size(range = c(2, 12), name="# of genes annotated to the term")+
+  theme_bw()
+
+  
+?geom_text
+```
+
+
+"Sorted gain" vs "Sorted wild" Down-regulated
+```{r}
+# From sorted_wt_vs_sorted_gf down
+
+query <- readLines("sorted_wt_vs_sorted_gf/down.txt")
+GO <- gost(query = query, organism = "celegans", 
+           ordered_query = FALSE, 
+           significant = TRUE, # When set significant to TRUE, there is no result
+           exclude_iea = TRUE, user_threshold = 0.2, # Threshold of 0.05 returns no result. Try 0.1
+           correction_method = "fdr")
+View(GO$result)
+gpSig <- GO$result
+
+gpSig %>%
+  dplyr::select(term_id, term_size, p_value) %>%
+  filter(p_value < 0.5) %>% # None of the GO terms are significant at 0.1 threshold
+  arrange(p_value) %>%
+  ggplot(aes(x= term_id, y=p_value, size = term_size, colour = p_value)) +
+  geom_point(alpha=0.5) +
+  scale_size(range = c(2, 12), name="Number of genes in list")+
+  theme_bw()
+
+# Why there are many non-significant GO terms
+# https://www.biostars.org/p/280562/
+
+```
+
+
+
+New
+
+"Sorted gain" vs "Sorted wild" Down-regulated
+```{r}
+# From sorted_wt_vs_sorted_gf down
+
+query <- readLines("new/sorted_wt_vs_sorted_gf/down.txt")
+GO <- gost(query = query, organism = "celegans", 
+           ordered_query = FALSE, 
+           significant = TRUE, # When set significant to TRUE, there is no result
+           exclude_iea = TRUE, user_threshold = 0.05,
+           correction_method = "fdr")
+
+# ?gost
+# View(GO$result)
+gpSig <- GO$result
+
+gpSig %>%
+  dplyr::select(term_name, term_id, term_size, p_value) %>%
+  filter(p_value < 0.05) %>% # None of the GO terms are significant at 0.1 threshold
+  arrange(p_value) %>%
+  ggplot(aes(x= p_value, y=term_name, size = term_size, colour = p_value)) +
+  geom_point(alpha=0.5) +
+  scale_size(range = c(2, 12), name="Number of genes in list")+
+  theme_bw()
+
+```
+
+
+
+
+"Sorted gain" vs "Sorted wild" Up-regulated
+```{r}
+# From sorted_wt_vs_sorted_gf up
+
+query <- readLines("new/sorted_wt_vs_sorted_gf/up.txt")
+GO <- gost(query = query, organism = "celegans", 
+           ordered_query = FALSE, 
+           significant = TRUE, # When set significant to TRUE, there is no result
+           exclude_iea = TRUE, user_threshold = 0.05,
+           correction_method = "fdr")
+
+?gost
+# View(GO$result)
+gpSig <- GO$result
+
+gpSig %>%
+  dplyr::select(term_name, term_id, term_size, p_value) %>%
+  filter(p_value < 0.05) %>% # None of the GO terms are significant at 0.1 threshold
+  arrange(p_value) %>%
+  ggplot(aes(x= p_value, y=term_name, size = term_size, colour = p_value)) +
+  geom_point(alpha=0.5) +
+  geom_text(aes(label=ifelse(term_size>=1200,as.character(term_name),'')),
+            hjust=0,vjust=-0.5, size = 3) + 
+  scale_size(range = c(2, 12), name="Number of genes in list")+
+  theme_bw()
+
+```
